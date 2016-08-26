@@ -182,22 +182,9 @@ public extension UIView {
             }
         }
         
-        //subviews are returning in opposite order. Sorting according the frames 'y'.
-        return textfields.sort({ (view1 : UIView, view2 : UIView) -> Bool in
-            
-            let frame1 = view1.convertRect(view1.bounds, toView: self)
-            let frame2 = view2.convertRect(view2.bounds, toView: self)
-
-            let x1 = CGRectGetMinX(frame1)
-            let y1 = CGRectGetMinY(frame1)
-            let x2 = CGRectGetMinX(frame2)
-            let y2 = CGRectGetMinY(frame2)
-            
-            if y1 != y2 {
-                return y1 < y2
-            } else {
-                return x1 < x2
-            }
+        // Sort using tag value
+        return textfields.sort({ (v1, v2) -> Bool in
+            return v1.tag <= v2.tag
         })
     }
     
