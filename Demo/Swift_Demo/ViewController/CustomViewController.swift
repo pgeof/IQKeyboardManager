@@ -6,6 +6,9 @@
 //  Copyright © 2015 Iftekhar. All rights reserved.
 //
 
+import UIKit
+import IQKeyboardManagerSwift
+
 class CustomViewController : UIViewController, UIPopoverPresentationControllerDelegate {
     
     private var returnHandler : IQKeyboardReturnKeyHandler!
@@ -60,7 +63,7 @@ class CustomViewController : UIViewController, UIPopoverPresentationControllerDe
         switchEnableTouchResign.on = IQKeyboardManager.sharedManager().enabledTouchResignedClasses.contains({ element in
             return element == CustomViewController.self
         })
-        
+                
         switchAllowPreviousNext.on = IQKeyboardManager.sharedManager().toolbarPreviousNextAllowedClasses.contains({ element in
             return element == IQPreviousNextView.self
         });
@@ -89,7 +92,7 @@ class CustomViewController : UIViewController, UIPopoverPresentationControllerDe
     @IBAction func disableInViewControllerAction(sender: UISwitch) {
         self.view.endEditing(true)
         if sender.on {
-            IQKeyboardManager.sharedManager().disabledDistanceHandlingClasses.append(CustomViewController)
+            IQKeyboardManager.sharedManager().disabledDistanceHandlingClasses.append(CustomViewController.self)
         }
         else {
             
@@ -104,7 +107,7 @@ class CustomViewController : UIViewController, UIPopoverPresentationControllerDe
     @IBAction func enableInViewControllerAction(sender: UISwitch) {
         self.view.endEditing(true)
         if sender.on {
-            IQKeyboardManager.sharedManager().enabledDistanceHandlingClasses.append(CustomViewController)
+            IQKeyboardManager.sharedManager().enabledDistanceHandlingClasses.append(CustomViewController.self)
         }
         else {
             
@@ -119,7 +122,7 @@ class CustomViewController : UIViewController, UIPopoverPresentationControllerDe
     @IBAction func disableToolbarAction(sender: UISwitch) {
         self.view.endEditing(true)
         if sender.on {
-            IQKeyboardManager.sharedManager().disabledToolbarClasses.append(CustomViewController)
+            IQKeyboardManager.sharedManager().disabledToolbarClasses.append(CustomViewController.self)
         }
         else {
 
@@ -134,7 +137,7 @@ class CustomViewController : UIViewController, UIPopoverPresentationControllerDe
     @IBAction func enableToolbarAction(sender: UISwitch) {
         self.view.endEditing(true)
         if sender.on {
-            IQKeyboardManager.sharedManager().enabledToolbarClasses.append(CustomViewController)
+            IQKeyboardManager.sharedManager().enabledToolbarClasses.append(CustomViewController.self)
         }
         else {
             if let index = IQKeyboardManager.sharedManager().enabledToolbarClasses.indexOf({ element in
@@ -148,7 +151,7 @@ class CustomViewController : UIViewController, UIPopoverPresentationControllerDe
     @IBAction func disableTouchOutsideAction(sender: UISwitch) {
         self.view.endEditing(true)
         if sender.on {
-            IQKeyboardManager.sharedManager().disabledTouchResignedClasses.append(CustomViewController)
+            IQKeyboardManager.sharedManager().disabledTouchResignedClasses.append(CustomViewController.self)
         }
         else {
             if let index = IQKeyboardManager.sharedManager().disabledTouchResignedClasses.indexOf({ element in
@@ -162,7 +165,7 @@ class CustomViewController : UIViewController, UIPopoverPresentationControllerDe
     @IBAction func enableTouchOutsideAction(sender: UISwitch) {
         self.view.endEditing(true)
         if sender.on {
-            IQKeyboardManager.sharedManager().enabledTouchResignedClasses.append(CustomViewController)
+            IQKeyboardManager.sharedManager().enabledTouchResignedClasses.append(CustomViewController.self)
         }
         else {
             
@@ -177,7 +180,7 @@ class CustomViewController : UIViewController, UIPopoverPresentationControllerDe
     @IBAction func allowedPreviousNextAction(sender: UISwitch) {
         self.view.endEditing(true)
         if sender.on {
-            IQKeyboardManager.sharedManager().toolbarPreviousNextAllowedClasses.append(IQPreviousNextView)
+            IQKeyboardManager.sharedManager().toolbarPreviousNextAllowedClasses.append(IQPreviousNextView.self)
         }
         else {
             
