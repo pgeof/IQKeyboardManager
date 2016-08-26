@@ -31,6 +31,10 @@ UIView hierarchy category.
 */
 public extension UIView {
     
+    public var shouldSortRespondersByTag: Bool {
+        return false
+    }
+    
     ///------------------------------
     /// MARK: canBecomeFirstResponder
     ///------------------------------
@@ -182,10 +186,15 @@ public extension UIView {
             }
         }
         
-        // Sort using tag value
-        return textfields.sort({ (v1, v2) -> Bool in
-            return v1.tag <= v2.tag
-        })
+        if self.shouldSortRespondersByTag {
+            // Sort using tag value
+            return textfields.sort({ (v1, v2) -> Bool in
+                return v1.tag <= v2.tag
+            })
+        }
+        else {
+            return textfields
+        }
     }
     
     private func _IQcanBecomeFirstResponder() -> Bool {
