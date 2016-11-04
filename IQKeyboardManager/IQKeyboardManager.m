@@ -46,6 +46,8 @@
 #import <UIKit/UICollectionView.h>
 #import <UIKit/NSLayoutConstraint.h>
 
+#import <objc/runtime.h>
+
 NSInteger const kIQDoneButtonToolbarTag             =   -1002;
 NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
 
@@ -75,6 +77,9 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
 
 /** To save topBottomLayoutConstraint original constant */
 @property(nonatomic, assign) CGFloat    layoutGuideConstraintInitialConstant;
+
+/** To save topBottomLayoutConstraint original constraint reference */
+@property(nonatomic, weak) NSLayoutConstraint   *layoutGuideConstraint;
 
 
 /*******************************************/
@@ -174,8 +179,8 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
 /** Override +load method to enable KeyboardManager when class loader load IQKeyboardManager. Enabling when app starts (No need to write any code) */
 +(void)load
 {
-    //Enabling IQKeyboardManager.
-    [[IQKeyboardManager sharedManager] setEnable:YES];
+    //Enabling IQKeyboardManager. Loading asynchronous on main thread
+    [self performSelectorOnMainThread:@selector(sharedManager) withObject:nil waitUntilDone:NO];
 }
 
 /*  Singleton Object Initialization. */
@@ -223,6 +228,7 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
             //Setting it's initial values
             strongSelf.animationDuration = 0.25;
             strongSelf.animationCurve = UIViewAnimationCurveEaseInOut;
+            [self setEnable:YES];
 			[self setKeyboardDistanceFromTextField:10.0];
             [self setShouldPlayInputClicks:YES];
             [self setShouldResignOnTouchOutside:NO];
@@ -234,6 +240,13 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
             [self setToolbarManageBehaviour:IQAutoToolbarBySubviews];
             [self setLayoutIfNeededOnUpdate:NO];
             [self setShouldFixInteractivePopGestureRecognizer:YES];
+            
+            //Loading IQToolbar, IQTitleBarButtonItem, IQBarButtonItem to fix first time keyboard apperance delay (Bug ID: #550)
+            {
+                UITextField *view = [[UITextField alloc] init];
+                [view addDoneOnKeyboardWithTarget:nil action:nil];
+                [view addPreviousNextDoneOnKeyboardWithTarget:nil previousAction:nil nextAction:nil doneAction:nil];
+            }
             
             //Initializing disabled classes Set.
             strongSelf.disabledDistanceHandlingClasses = [[NSMutableSet alloc] initWithObjects:[UITableViewController class], nil];
@@ -575,17 +588,15 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
     //  (Bug ID: #250)
     IQLayoutGuidePosition layoutGuidePosition = IQLayoutGuidePositionNone;
     
-    NSLayoutConstraint *constraint = [[_textFieldView viewController] IQLayoutGuideConstraint];
-    
     //If topLayoutGuide constraint
-    if (constraint.firstItem == [[_textFieldView viewController] topLayoutGuide] ||
-        constraint.secondItem == [[_textFieldView viewController] topLayoutGuide])
+    if (_layoutGuideConstraint && (_layoutGuideConstraint.firstItem == [[_textFieldView viewController] topLayoutGuide] ||
+        _layoutGuideConstraint.secondItem == [[_textFieldView viewController] topLayoutGuide]))
     {
         layoutGuidePosition = IQLayoutGuidePositionTop;
     }
     //If bottomLayoutGuice constraint
-    else if (constraint.firstItem == [[_textFieldView viewController] bottomLayoutGuide] ||
-             constraint.secondItem == [[_textFieldView viewController] bottomLayoutGuide])
+    else if (_layoutGuideConstraint && (_layoutGuideConstraint.firstItem == [[_textFieldView viewController] bottomLayoutGuide] ||
+             _layoutGuideConstraint.secondItem == [[_textFieldView viewController] bottomLayoutGuide]))
     {
         layoutGuidePosition = IQLayoutGuidePositionBottom;
     }
@@ -804,15 +815,15 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
     
     if (layoutGuidePosition == IQLayoutGuidePositionTop)
     {
-        CGFloat constant = MIN(_layoutGuideConstraintInitialConstant, constraint.constant-move);
+        CGFloat constant = MIN(_layoutGuideConstraintInitialConstant, _layoutGuideConstraint.constant-move);
         
         __weak typeof(self) weakSelf = self;
 
-        [UIView animateWithDuration:_animationDuration delay:0 options:(7<<16|UIViewAnimationOptionBeginFromCurrentState) animations:^{
+        [UIView animateWithDuration:_animationDuration delay:0 options:(_animationCurve|UIViewAnimationOptionBeginFromCurrentState) animations:^{
 
             __strong typeof(self) strongSelf = weakSelf;
 
-            constraint.constant = constant;
+            weakSelf.layoutGuideConstraint.constant = constant;
             [strongSelf.rootViewController.view setNeedsLayout];
             [strongSelf.rootViewController.view layoutIfNeeded];
         } completion:NULL];
@@ -820,15 +831,15 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
     //If bottomLayoutGuice constraint
     else if (layoutGuidePosition == IQLayoutGuidePositionBottom)
     {
-        CGFloat constant = MAX(_layoutGuideConstraintInitialConstant, constraint.constant+move);
+        CGFloat constant = MAX(_layoutGuideConstraintInitialConstant, _layoutGuideConstraint.constant+move);
         
         __weak typeof(self) weakSelf = self;
 
-        [UIView animateWithDuration:_animationDuration delay:0 options:(7<<16|UIViewAnimationOptionBeginFromCurrentState) animations:^{
+        [UIView animateWithDuration:_animationDuration delay:0 options:(_animationCurve|UIViewAnimationOptionBeginFromCurrentState) animations:^{
 
             __strong typeof(self) strongSelf = weakSelf;
 
-            constraint.constant = constant;
+            weakSelf.layoutGuideConstraint.constant = constant;
             [strongSelf.rootViewController.view setNeedsLayout];
             [strongSelf.rootViewController.view layoutIfNeeded];
         } completion:NULL];
@@ -995,7 +1006,8 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
     if (_textFieldView != nil && CGRectEqualToRect(_topViewBeginRect, CGRectZero))    //  (Bug ID: #5)
     {
         //  keyboard is not showing(At the beginning only). We should save rootViewRect and _layoutGuideConstraintInitialConstant.
-        _layoutGuideConstraintInitialConstant = [[[_textFieldView viewController] IQLayoutGuideConstraint] constant];
+        _layoutGuideConstraint = [[_textFieldView viewController] IQLayoutGuideConstraint];
+        _layoutGuideConstraintInitialConstant = [_layoutGuideConstraint constant];
 
         //  keyboard is not showing(At the beginning only). We should save rootViewRect.
         _rootViewController = [_textFieldView topMostController];
@@ -1015,8 +1027,8 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
     }
 
     //  Getting keyboard animation.
-    _animationCurve = [[aNotification userInfo][UIKeyboardAnimationCurveUserInfoKey] integerValue];
-    _animationCurve = _animationCurve<<16;
+    NSInteger curve = [[aNotification userInfo][UIKeyboardAnimationCurveUserInfoKey] integerValue];
+    _animationCurve = curve<<16;
 
     //  Getting keyboard animation duration
     CGFloat duration = [[aNotification userInfo][UIKeyboardAnimationDurationUserInfoKey] floatValue];
@@ -1164,15 +1176,10 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
 
             __strong typeof(self) strongSelf = weakSelf;
 
-            NSLayoutConstraint *constraint = [[strongSelf.textFieldView viewController] IQLayoutGuideConstraint];
-            
             //If done LayoutGuide tweak
-            if (constraint.firstItem == [[strongSelf.textFieldView viewController] topLayoutGuide] ||
-                constraint.firstItem == [[strongSelf.textFieldView viewController] bottomLayoutGuide] ||
-                constraint.secondItem == [[strongSelf.textFieldView viewController] topLayoutGuide] ||
-                constraint.secondItem == [[strongSelf.textFieldView viewController] bottomLayoutGuide])
+            if (weakSelf.layoutGuideConstraint)
             {
-                constraint.constant = strongSelf.layoutGuideConstraintInitialConstant;
+                weakSelf.layoutGuideConstraint.constant = strongSelf.layoutGuideConstraintInitialConstant;
                 [strongSelf.rootViewController.view setNeedsLayout];
                 [strongSelf.rootViewController.view layoutIfNeeded];
             }
@@ -1195,8 +1202,24 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
         } completion:NULL];
         _rootViewController = nil;
     }
+    //If done LayoutGuide tweak
+    else if (_layoutGuideConstraint)
+    {
+        __weak typeof(self) weakSelf = self;
+        
+        //Used UIViewAnimationOptionBeginFromCurrentState to minimize strange animations.
+        [UIView animateWithDuration:_animationDuration delay:0 options:(_animationCurve|UIViewAnimationOptionBeginFromCurrentState) animations:^{
+            __strong typeof(self) strongSelf = weakSelf;
+
+            weakSelf.layoutGuideConstraint.constant = strongSelf.layoutGuideConstraintInitialConstant;
+            [strongSelf.rootViewController.view setNeedsLayout];
+            [strongSelf.rootViewController.view layoutIfNeeded];
+        } completion:NULL];
+    }
 
     //Reset all values
+    _layoutGuideConstraint = nil;
+    _layoutGuideConstraintInitialConstant = 0;
     _lastScrollView = nil;
     _kbSize = CGSizeZero;
     _startingContentInsets = UIEdgeInsetsZero;
@@ -1294,7 +1317,8 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
     if (CGRectEqualToRect(_topViewBeginRect, CGRectZero))    //  (Bug ID: #5)
     {
         //  keyboard is not showing(At the beginning only). We should save rootViewRect and _layoutGuideConstraintInitialConstant.
-        _layoutGuideConstraintInitialConstant = [[[_textFieldView viewController] IQLayoutGuideConstraint] constant];
+        _layoutGuideConstraint = [[_textFieldView viewController] IQLayoutGuideConstraint];
+        _layoutGuideConstraintInitialConstant = [_layoutGuideConstraint constant];
         
         _rootViewController = [_textFieldView topMostController];
         if (_rootViewController == nil)  _rootViewController = [[self keyWindow] topMostController];
@@ -1681,11 +1705,10 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
     //	Getting all the sibling textFields.
     NSArray *siblings = [self responderViews];
     
-    [self showLog:[NSString stringWithFormat:@"Found %d responder sibling(s)",siblings.count]];
+    [self showLog:[NSString stringWithFormat:@"Found %lu responder sibling(s)",(unsigned long)siblings.count]];
 
     //	If only one object is found, then adding only Done button.
-    if (siblings.count==1 ||
-        self.shouldHidePreviousNext)
+    if ((siblings.count==1 && self.previousNextDisplayMode == IQPreviousNextDisplayModeDefault) || self.previousNextDisplayMode == IQPreviousNextDisplayModeAlwaysHide)
     {
         UITextField *textField = (UITextField*)_textFieldView;
         
@@ -1693,23 +1716,27 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
         //setInputAccessoryView: check   (Bug ID: #307)
         if ([textField respondsToSelector:@selector(setInputAccessoryView:)])
         {
-            if (![textField inputAccessoryView] ||
-                 [[textField inputAccessoryView] tag] == kIQPreviousNextButtonToolbarTag)
+            BOOL needReload = NO;
+
+            if (![textField inputAccessoryView] || [[textField inputAccessoryView] tag] == kIQPreviousNextButtonToolbarTag)
             {
                 //Supporting Custom Done button image (Enhancement ID: #366)
                 if (_toolbarDoneBarButtonItemImage)
                 {
                     [textField addRightButtonOnKeyboardWithImage:_toolbarDoneBarButtonItemImage target:self action:@selector(doneAction:) shouldShowPlaceholder:_shouldShowTextFieldPlaceholder];
+                    needReload = YES;
                 }
                 //Supporting Custom Done button text (Enhancement ID: #209, #411, Bug ID: #376)
                 else if (_toolbarDoneBarButtonItemText)
                 {
                     [textField addRightButtonOnKeyboardWithText:_toolbarDoneBarButtonItemText target:self action:@selector(doneAction:) shouldShowPlaceholder:_shouldShowTextFieldPlaceholder];
+                    needReload = YES;
                 }
                 else
                 {
                     //Now adding textField placeholder text as title of IQToolbar  (Enhancement ID: #27)
                     [textField addDoneOnKeyboardWithTarget:self action:@selector(doneAction:) shouldShowPlaceholder:_shouldShowTextFieldPlaceholder];
+                    needReload = YES;
                 }
                 textField.inputAccessoryView.tag = kIQDoneButtonToolbarTag; //  (Bug ID: #78)
             }
@@ -1724,6 +1751,7 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
                     if ([toolbar.doneImage isEqual:_toolbarDoneBarButtonItemImage] == NO)
                     {
                         [textField addRightButtonOnKeyboardWithImage:_toolbarDoneBarButtonItemImage target:self action:@selector(doneAction:) shouldShowPlaceholder:_shouldShowTextFieldPlaceholder];
+                        needReload = YES;
                     }
                 }
                 //Supporting Custom Done button text (Enhancement ID: #209, #411, Bug ID: #376)
@@ -1733,6 +1761,7 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
                     if ([toolbar.doneTitle isEqualToString:_toolbarDoneBarButtonItemText] == NO)
                     {
                         [textField addRightButtonOnKeyboardWithText:_toolbarDoneBarButtonItemText target:self action:@selector(doneAction:) shouldShowPlaceholder:_shouldShowTextFieldPlaceholder];
+                        needReload = YES;
                     }
                 }
                 else if ((_toolbarDoneBarButtonItemText == nil && toolbar.doneTitle) ||
@@ -1740,8 +1769,14 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
                 {
                     //Now adding textField placeholder text as title of IQToolbar  (Enhancement ID: #27)
                     [textField addDoneOnKeyboardWithTarget:self action:@selector(doneAction:) shouldShowPlaceholder:_shouldShowTextFieldPlaceholder];
+                    needReload = YES;
                 }
                 textField.inputAccessoryView.tag = kIQDoneButtonToolbarTag; //  (Bug ID: #78)
+            }
+            
+            if (needReload)
+            {
+                [textField reloadInputViews];
             }
         }
         
@@ -1808,7 +1843,7 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
             }
         }
     }
-    else if(siblings.count)
+    else if ((siblings.count && self.previousNextDisplayMode == IQPreviousNextDisplayModeDefault) || self.previousNextDisplayMode == IQPreviousNextDisplayModeAlwaysShow)
     {
         //	If more than 1 textField is found. then adding previous/next/done buttons on it.
         for (UITextField *textField in siblings)
@@ -1817,6 +1852,8 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
             //setInputAccessoryView: check   (Bug ID: #307)
             if ([textField respondsToSelector:@selector(setInputAccessoryView:)])
             {
+                BOOL needReload = NO;
+
                 if ((![textField inputAccessoryView] ||
                      [[textField inputAccessoryView] tag] == kIQDoneButtonToolbarTag))
                 {
@@ -1824,16 +1861,19 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
                     if (_toolbarDoneBarButtonItemImage)
                     {
                         [textField addPreviousNextRightOnKeyboardWithTarget:self rightButtonImage:_toolbarDoneBarButtonItemImage previousAction:@selector(previousAction:) nextAction:@selector(nextAction:) rightButtonAction:@selector(doneAction:) shouldShowPlaceholder:_shouldShowTextFieldPlaceholder];
+                        needReload = YES;
                     }
                     //Supporting Custom Done button text (Enhancement ID: #209, #411, Bug ID: #376)
                     else if (_toolbarDoneBarButtonItemText)
                     {
                         [textField addPreviousNextRightOnKeyboardWithTarget:self rightButtonTitle:_toolbarDoneBarButtonItemText previousAction:@selector(previousAction:) nextAction:@selector(nextAction:) rightButtonAction:@selector(doneAction:) shouldShowPlaceholder:_shouldShowTextFieldPlaceholder];
+                        needReload = YES;
                     }
                     else
                     {
                         //Now adding textField placeholder text as title of IQToolbar  (Enhancement ID: #27)
                         [textField addPreviousNextDoneOnKeyboardWithTarget:self previousAction:@selector(previousAction:) nextAction:@selector(nextAction:) doneAction:@selector(doneAction:) shouldShowPlaceholder:_shouldShowTextFieldPlaceholder];
+                        needReload = YES;
                     }
                     textField.inputAccessoryView.tag = kIQPreviousNextButtonToolbarTag; //  (Bug ID: #78)
                 }
@@ -1848,6 +1888,7 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
                         if ([toolbar.doneImage isEqual:_toolbarDoneBarButtonItemImage] == NO)
                         {
                             [textField addPreviousNextRightOnKeyboardWithTarget:self rightButtonImage:_toolbarDoneBarButtonItemImage previousAction:@selector(previousAction:) nextAction:@selector(nextAction:) rightButtonAction:@selector(doneAction:) shouldShowPlaceholder:_shouldShowTextFieldPlaceholder];
+                            needReload = YES;
                         }
                     }
                     //Supporting Custom Done button text (Enhancement ID: #209, #411, Bug ID: #376)
@@ -1856,6 +1897,7 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
                         if ([toolbar.doneTitle isEqualToString:_toolbarDoneBarButtonItemText] == NO)
                         {
                             [textField addPreviousNextRightOnKeyboardWithTarget:self rightButtonTitle:_toolbarDoneBarButtonItemText previousAction:@selector(previousAction:) nextAction:@selector(nextAction:) rightButtonAction:@selector(doneAction:) shouldShowPlaceholder:_shouldShowTextFieldPlaceholder];
+                            needReload = YES;
                         }
                     }
                     else if ((_toolbarDoneBarButtonItemText == nil && toolbar.doneTitle) ||
@@ -1863,8 +1905,14 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
                     {
                         //Now adding textField placeholder text as title of IQToolbar  (Enhancement ID: #27)
                         [textField addPreviousNextDoneOnKeyboardWithTarget:self previousAction:@selector(previousAction:) nextAction:@selector(nextAction:) doneAction:@selector(doneAction:) shouldShowPlaceholder:_shouldShowTextFieldPlaceholder];
+                        needReload = YES;
                     }
                     textField.inputAccessoryView.tag = kIQPreviousNextButtonToolbarTag; //  (Bug ID: #78)
+                }
+
+                if (needReload)
+                {
+                    [textField reloadInputViews];
                 }
             }
             
@@ -1934,7 +1982,14 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
                 //	If firstTextField, then previous should not be enabled.
                 if (siblings[0] == textField)
                 {
-                    [textField setEnablePrevious:NO next:YES];
+                    if (siblings.count == 1)
+                    {
+                        [textField setEnablePrevious:NO next:NO];
+                    }
+                    else
+                    {
+                        [textField setEnablePrevious:NO next:YES];
+                    }
                 }
                 //	If lastTextField then next should not be enaled.
                 else if ([siblings lastObject] == textField)
@@ -1962,7 +2017,7 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
     //	Getting all the sibling textFields.
     NSArray *siblings = [self responderViews];
     
-    [self showLog:[NSString stringWithFormat:@"Found %d responder sibling(s)",siblings.count]];
+    [self showLog:[NSString stringWithFormat:@"Found %lu responder sibling(s)",(unsigned long)siblings.count]];
 
     for (UITextField *textField in siblings)
     {
@@ -1984,32 +2039,15 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
 /**	reloadInputViews to reload toolbar buttons enable/disable state on the fly Enhancement ID #434. */
 - (void)reloadInputViews
 {
-    //	Getting all the sibling textFields.
-    NSArray *siblings = [self responderViews];
-    
-    for (UITextField *textField in siblings)
+    //If enabled then adding toolbar.
+    if ([self privateIsEnableAutoToolbar] == YES)
     {
-        //	If firstTextField, then previous should not be enabled.
-        if (siblings[0] == textField)
-        {
-            if (siblings.count == 1)
-            {
-                [textField setEnablePrevious:NO next:NO];
-            }
-            else
-            {
-                [textField setEnablePrevious:NO next:YES];
-            }
-        }
-        //	If lastTextField then next should not be enaled.
-        else if ([siblings lastObject] == textField)
-        {
-            [textField setEnablePrevious:YES next:NO];
-        }
-        else
-        {
-            [textField setEnablePrevious:YES next:YES];
-        }
+        [self addToolbarIfRequired];
+    }
+    //Else removing toolbar.
+    else
+    {
+        [self removeToolbarIfRequired];
     }
 }
 
@@ -2107,5 +2145,23 @@ NSInteger const kIQPreviousNextButtonToolbarTag     =   -1005;
 
 
 @implementation IQKeyboardManager(IQKeyboardManagerDeprecated)
+
+-(void)setShouldHidePreviousNext:(BOOL)shouldHidePreviousNext
+{
+    objc_setAssociatedObject(self, @selector(shouldHidePreviousNext), @(shouldHidePreviousNext), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    if (shouldHidePreviousNext) {
+        self.previousNextDisplayMode = IQPreviousNextDisplayModeAlwaysHide;
+    } else {
+        self.previousNextDisplayMode = IQPreviousNextDisplayModeDefault;
+    }
+}
+
+-(BOOL)shouldHidePreviousNext
+{
+    NSNumber *shouldHidePreviousNext = objc_getAssociatedObject(self, @selector(shouldHidePreviousNext));
+    
+    return [shouldHidePreviousNext boolValue];
+}
 
 @end
