@@ -190,7 +190,7 @@ public extension UIView {
         
         if self.shouldSortRespondersByTag {
             // Sort using tag value
-            return textfields.sort({ (v1, v2) -> Bool in
+            return textfields.sorted(by: { (v1, v2) -> Bool in
                 return v1.tag <= v2.tag
             })
         }
