@@ -29,9 +29,9 @@ private var kIQIsAskingCanBecomeFirstResponder = "kIQIsAskingCanBecomeFirstRespo
 /**
 UIView hierarchy category.
 */
-public extension UIView {
+open extension UIView {
     
-    public var shouldSortRespondersByTag: Bool {
+    open var shouldSortRespondersByTag: Bool {
         return false
     }
     
