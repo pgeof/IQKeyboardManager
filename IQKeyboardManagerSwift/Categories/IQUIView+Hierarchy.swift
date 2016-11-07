@@ -29,11 +29,7 @@ private var kIQIsAskingCanBecomeFirstResponder = "kIQIsAskingCanBecomeFirstRespo
 /**
 UIView hierarchy category.
 */
-open extension UIView {
-    
-    open var shouldSortRespondersByTag: Bool {
-        return false
-    }
+public extension UIView {
     
     ///------------------------------
     /// MARK: canBecomeFirstResponder
@@ -188,7 +184,7 @@ open extension UIView {
             }
         }
         
-        if self.shouldSortRespondersByTag {
+        if let _ = self as? IQSortRespondersByTag {
             // Sort using tag value
             return textfields.sorted(by: { (v1, v2) -> Bool in
                 return v1.tag <= v2.tag
